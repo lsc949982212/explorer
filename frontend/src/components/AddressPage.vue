@@ -210,7 +210,7 @@
         showNoData1:false,//无数据的时候显示无数据状态
         showNoData2:false,
         transactionsCount:0,
-        showProfile:true,
+        showProfile:false,
         informationValidatorsLine: {},//折线图端所有信息
         informationUptimeLine:{},
         transactionsTitle: "",
@@ -306,7 +306,7 @@
             return data.data;
           }
         }).then((data)=>{
-          if(data){
+          if(data && typeof data === 'object'){
             this.nameValue = data.Description.Moniker;
             this.pubKeyValue = data.PubKey;
             this.websiteValue = data.Description.Website?data.Description.Website:'--';
