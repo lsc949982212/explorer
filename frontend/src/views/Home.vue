@@ -2,7 +2,7 @@
   <div class="home_wrap">
     <div :class="pageClassName">
       <div class="information_preview">
-        <div class="information_preview_module latest_block_content" @click="toBlockDetail(currentBlockHeight)">
+        <div class="information_preview_module">
           <span :class="flFadeInBlockHeight ? 'animation' : '' ">{{currentBlockHeight}}</span>
           <span class="information_module_key">Latest Block</span>
         </div>
@@ -48,345 +48,334 @@
 </template>
 
 <script>
-import Tools from '../util/Tools';
-import EchartsPie from "../components/EchartsPie";
-import EchartsLine from "../components/EchartsLine";
-import HomeBlockModule from "../components/HomeBlockModule";
-import Service from '../util/axios';
-import Constant from "../constant/Constant"
+  import Tools from '../util/Tools';
+  import EchartsPie from "../components/EchartsPie";
+  import EchartsLine from "../components/EchartsLine";
+  import HomeBlockModule from "../components/HomeBlockModule";
+  import Service from '../util/axios';
+  import Constant from "../constant/Constant"
   export default {
-      name: 'app-header',
-      components: {EchartsPie, EchartsLine, HomeBlockModule},
-          data() {
-              return {
-                  devicesWidth: window.innerWidth,
-                  pageClassName: 'personal_computer_home_wrap',
-                  module_item_wrap: 'module_item_wrap_computer',
-                  currentBlockHeight: '--',
-                  validatorValue: '--',
-                  transactionValue: '--',
-                  lastBlockAge: '--',
-                  votingPowerValue: '--',
-                  blockHeightValue: '--',
-                  timestampValue: '--',
-                  information: {},
-                  informationLine: {},
-                  blocksInformation: [],
-                  transactionInformation: [],
-                  innerWidth : window.innerWidth,
-                  blocksTimer:null,
-                  transfersTimer:null,
-                  diffSeconds: 0,
-                  flFadeInBlockHeight:false,
-                  flFadeInTransaction: false,
-                  flFadeInValidator:false,
-                  flFadeInVotingPower:false,
-                  timer: null
-              }
-          },
-
-          beforeMount() {
-              this.getBlocksStatus();
-              this.getBlocksList();
-              this.getTransactionHistory();
-              this.getTransactionList();
-              this.getValidatorsList();
-          },
-          mounted() {
-              document.getElementById('router_wrap').addEventListener('click', this.hideFeature);
-              let that =this;
-            that.getBlocksList();
-            that.getTransactionHistory();
-            that.getTransactionList();
-            that.getValidatorsList();
-              /*this.timer = setInterval(function () {
-                  that.getBlocksList();
-                  that.getTransactionHistory();
-                  that.getTransactionList();
-                  that.getValidatorsList();
-              },10000);*/
-              window.addEventListener('resize',this.onresize);
-              if (window.innerWidth > 910) {
-                  this.pageClassName = 'personal_computer_home_wrap';
-                  this.module_item_wrap = 'module_item_wrap_computer';
-                  if(document.getElementsByClassName('fixed_item_height').length > 0){
-                      document.getElementsByClassName('fixed_item_height')[0].style.height = '6.55rem';
-                      document.getElementsByClassName('fixed_item_height')[1].style.height = '6.55rem';
-                  }
-              } else {
-                  this.pageClassName = 'mobile_home_wrap';
-                  this.module_item_wrap = 'module_item_wrap_mobile';
-              }
-          },
-          beforeDestroy(){
-            window.removeEventListener('resize',this.onWindowResize);
-            clearInterval(this.timer)
-          },
-      methods: {
-          onresize(){
-              this.innerWidth = window.innerWidth;
-              if(window.innerWidth > 910){
-                  this.pageClassName = 'personal_computer_home_wrap';
-                  this.module_item_wrap = 'module_item_wrap_computer';
-                  if(document.getElementsByClassName('fixed_item_height').length > 0) {
-                      document.getElementsByClassName('fixed_item_height')[0].style.height = '6.55rem';
-                      document.getElementsByClassName('fixed_item_height')[1].style.height = '6.55rem';
-                  }
-              }else {
-                  this.pageClassName = 'mobile_home_wrap';
-                  this.module_item_wrap = 'module_item_wrap_mobile';
-                  if(document.getElementsByClassName('fixed_item_height').length > 0) {
-                      document.getElementsByClassName('fixed_item_height')[0].style.height = 'auto';
-                      document.getElementsByClassName('fixed_item_height')[1].style.height = 'auto';
-                  }
-              }
-          },
-          getBlocksStatus() {
-              this.flFadeInTransaction = false;
-              let url = `/api/chain/status`;
-              let lastTransfer =  {};
-              let that = this;
-              Service.http(url).then((data) => {
-                setTimeout(function () {
-                  let storedLastTransfer  = localStorage.getItem('lastTransfer') ? JSON.parse(localStorage.getItem('lastTransfer')) : '';
-                  if(storedLastTransfer){
-                    if(storedLastTransfer.txCount !== data.TxCount
-                      || storedLastTransfer.tps !== data.Tps){
-                      that.flFadeInTransaction = true
-                    }
-                  }
-
-                  let num = data.TxCount;
-                  if(data) {
-                    if(data.TxCount > 1000000000){
-                      num = `${(data.TxCount/1000000000).toFixed(2)} B`;
-                    }else if(data.TxCount > 1000000){
-                      num = `${(data.TxCount/1000000).toFixed(2)} M`;
-                    }else if(data.TxCount > 1000){
-                      num = `${(data.TxCount/1000).toFixed(2)} K`;
-                    }
-                    that.transactionValue = `${num}(${data.Tps.toFixed(2)} TPS)`;
-                  }
-                  lastTransfer.txCount = data.TxCount;
-                  lastTransfer.tps = data.Tps;
-                  localStorage.setItem('lastTransfer',JSON.stringify(lastTransfer))
-                },1000)
-
-              }).catch(e => {
-                  console.log(e)
-              })
-          },
-          getValidatorsList() {
-              let url = `/api/stake/candidatesTop`;
-              Service.http(url).then((data) => {
-                  let colors = ['#3498db', '#47a2df', '#59ade3', '#6cb7e7', '#7fc2eb', '#91ccef', '#a4d7f3', '#b7e1f7', '#c9ecfb', '#dcf6ff', '#DADDE3',];
-                  let [seriesData, legendData] = [[], []];
-                  if (data.validators instanceof Array) {
-                      let totalCount = 0;
-                      data.validators.forEach(item=>totalCount += item.voting_power);
-                      let others = data.power_all - totalCount;
-                      let monikerReserveLength = 10;
-                      let addressReserveLength = 6;
-                      let powerAll = data.power_all;
-                      for (let i = 0; i < data.validators.length; i++) {
-                        seriesData.push({
-                          value: data.validators[i].voting_power,
-                          name: data.validators[i].description && data.validators[i].description.moniker ? `${Tools.formatString(data.validators[i].description.moniker,monikerReserveLength,"...")} (${Tools.formatString(data.validators[i].address,addressReserveLength,"...")})` : (data.validators[i].address ? data.validators[i].address : ''),
-                          itemStyle: {color: colors[i]},
-                          emphasis : {itemStyle:{color: colors[i]}},
-                          upTime:`${data.validators[i].up_time}%`,
-                          address:data.validators[i].address,
-                          powerAll,
-                        });
-                        legendData.push(data.validators[i].description && data.validators[i].description.moniker ? `${Tools.formatString(data.validators[i].description.moniker,monikerReserveLength,"...")} (${Tools.formatString(data.validators[i].address,addressReserveLength,"...")})` : (data.validators[i].address ? data.validators[i].address : ''))
-                      }
-
-                    if(others > 0 ){
-                      seriesData.push({
-                        value: others,
-                        name:'others',
-                        powerAll,
-                        itemStyle:{color:colors[10]},
-                      });
-                    }
-
-                  }
-                  this.information = {legendData, seriesData}
-
-              }).catch(e => {
-                console.log(e)
-              })
-          },
-          getTransactionHistory() {
-          let url = `/api/txsByDay`;
-          Service.http(url).then((data) => {
-            let maxValue = 0;
-            if(data){
-              data.forEach(item=>{
-                if(item.Count > maxValue){
-                  maxValue = item.Count;
-                }
-              });
-              let xData = data.map(item=>`${String(item.Time).substr(5,2)}/${String(item.Time).substr(8,2)}/${String(item.Time).substr(0,4)}`);
-              let seriesData = data.map(item=>item.Count);
-              this.informationLine = {maxValue,xData,seriesData};
-            }
-          }).catch(e => {
-            console.log(e)
-          })
-        },
-        hideFadeinAnimation(){
-          this.flFadeInBlockHeight = false;
-          this.flFadeInValidator = false;
-          this.flFadeInVotingPower = false;
-        },
-        showFadeinAnimation(blockList,numerator,denominator){
-          let storedLastBlock = localStorage.getItem('lastBlock') ? JSON.parse(localStorage.getItem('lastBlock')) : '';
-          if(storedLastBlock){
-            if(storedLastBlock.activeValidator !== blockList.Data[0].Block.LastCommit.Precommits.length || storedLastBlock.totalValidator !== blockList.Data[0].Validators.length){
-              this.flFadeInValidator = true;
-            }
-            if(storedLastBlock.numerator !== numerator || storedLastBlock.denominator !== denominator){
-              this.flFadeInVotingPower = true
-            }
-          }
-        },
-        showBlockFadeinAnimation(blockList){
-          let storedLastBlockHeight = localStorage.getItem('lastBlockHeight') ? localStorage.getItem('lastBlockHeight') : '';
-          if(storedLastBlockHeight){
-            for(let index = 0; index < blockList.Data.length; index++){
-              if(blockList.Data[index].Height > storedLastBlockHeight){
-                blockList.Data[index].showAnimation = "show"
-              }
-            }
-          }
-        },
-        getBlocksList() {
-          let url = `/api/blocks/1/10`;
-
-          Service.http(url).then((blockList) => {
-            this.getBlocksStatus();
-            this.hideFadeinAnimation();
-            if(blockList.Data){
-              let denominator = 0,lastBlock = {};
-              blockList.Data[0].Validators.forEach(item=>denominator += item.VotingPower);
-              let numerator = 0;
-              for(let i = 0; i < blockList.Data[0].Block.LastCommit.Precommits.length; i++){
-                for (let j = 0; j < blockList.Data[0].Validators.length; j++){
-                  if(blockList.Data[0].Block.LastCommit.Precommits[i].ValidatorAddress === blockList.Data[0].Validators[j].Address){
-                    numerator += blockList.Data[0].Validators[j].VotingPower;
-                    break;
-                  }
-                }
-              }
-              lastBlock.lastBlockHeight = blockList.Data[0].Height;
-              lastBlock.numerator = numerator;
-              lastBlock.denominator = denominator;
-              lastBlock.activeValidator = blockList.Data[0].Block.LastCommit.Precommits.length;
-              lastBlock.totalValidator = blockList.Data[0].Validators.length;
-              this.validatorValue = `${blockList.Data[0].Block.LastCommit.Precommits.length} voting / ${blockList.Data[0].Validators.length} total`;
-              this.votingPowerValue = denominator !== 0? `${(numerator/denominator).toFixed(2)*100}%`:'';
-              this.showFadeinAnimation(blockList,numerator,denominator);
-              this.showBlockFadeinAnimation(blockList);
-              let that = this;
-              clearInterval(this.blocksTimer);
-              this.blocksTimer = setInterval(function () {
-                let storedLastBlockHeight = localStorage.getItem('lastBlockHeight');
-                if(storedLastBlockHeight){
-                  if(Number(storedLastBlockHeight) !== blockList.Data[0].Height){
-                    that.flFadeInBlockHeight = true;
-                  }
-                }
-                let currentServerTime = new Date().getTime() + that.diffMilliseconds;
-                that.lastBlockAge = Tools.formatAge(currentServerTime,blockList.Data[0].Time);
-                that.diffSeconds = Math.floor(Tools.getDiffMilliseconds(currentServerTime,blockList.Data[0].Time)/1000);
-                localStorage.setItem('lastBlock',JSON.stringify(lastBlock));
-                localStorage.setItem("lastBlockHeight",blockList.Data[0].Height);
-                that.currentBlockHeight = blockList.Data[0].Height;
-                that.blocksInformation = blockList.Data.map(item => {
-                  return {
-                    showAnimation: item.showAnimation ? item.showAnimation : "",
-                    Height: item.Height,
-                    Proposer: item.Hash,
-                    Txn: item.NumTxs,
-                    Time: Tools.format2UTC(item.Time),
-                    Fee: '0 IRIS',
-                    age: Tools.formatAge(currentServerTime,item.Time,Constant.SUFFIX,Constant.PREFIX)
-                  };
-                });
-              },1000);
-            }
-          }).catch(e => {
-            console.log(e)
-          })
-        },
-        skipValidators(){
-          this.$router.push('/validators/3/active');
-        },
-        getTransactionList() {
-          let url = `/api/txs/1/10`;
-          Service.http(url).then((transactionList) => {
-            if(transactionList.Data){
-              let that = this;
-              for (let txIndex = 0; txIndex < transactionList.Data.length; txIndex++){
-                if(new Date(transactionList.Data[txIndex].Time).getTime() > localStorage.getItem("lastTxTime")){
-                  transactionList.Data[txIndex].showAnimation = "show"
-                }
-              }
-              let lastTxTime = new Date(transactionList.Data[0].Time).getTime();
-              clearInterval(this.transfersTimer);
-              this.transfersTimer = setInterval(function () {
-                localStorage.setItem('lastTxTime',lastTxTime);
-                that.transactionInformation = transactionList.Data.map(item => {
-                  let [Amount, Fee] = ['--', '--'];
-                  if(item.Amount){
-                    if (item.Amount instanceof Array) {
-                      if(item.Amount.length > 0){
-                        item.Amount[0].amount = Tools.formatAmount(item.Amount[0].amount);
-                      }
-                      if(Tools.flTxType(item.Type)){
-                        Amount = item.Amount.map(listItem => `${listItem.amount} SHARES`).join(',');
-                      }else {
-                        Amount = item.Amount.map(listItem => `${listItem.amount} ${Tools.formatDenom(listItem.denom).toUpperCase()}`).join(',');
-                      }
-                    } else if (item.Amount && Object.keys(item.Amount).includes('amount') && Object.keys(item.Amount).includes('denom')) {
-                      Amount = `${item.Amount.amount} ${Tools.formatDenom(item.Amount.denom).toUpperCase()}`;
-                      if(Tools.flTxType(item.Type)){
-                        Amount = `${item.Amount.amount} SHARES`;
-                      }
-                    }
-                  }else {
-                    Amount = '';
-                  }
-                  if(item.ActualFee.amount && item.ActualFee.denom){
-                    Fee =  `${Tools.formatFeeToFixedNumber(item.ActualFee.amount)} ${Tools.formatDenom(item.ActualFee.denom).toUpperCase()}`;
-                  }
-                  let currentServerTime = new Date().getTime() + that.diffMilliseconds;
-                  return {
-                    showAnimation: item.showAnimation ? item.showAnimation : '',
-                    TxHash: item.TxHash,
-                    From: item.From,
-                    To: item.To,
-                    Type: item.Type === 'coin'?'transfer':item.Type,
-                    Fee,
-                    Amount,
-                    Time: Tools.format2UTC(item.Time),
-                    age: Tools.formatAge(currentServerTime,item.Time,Constant.SUFFIX,Constant.PREFIX)
-                  };
-                })
-              },1000)
-            }
-          }).catch(e => {
-            console.log(e)
-          })
-        },
-        toBlockDetail(blockHeight){
-            if(blockHeight && blockHeight !== '--'){
-              let path = `/blocks_detail/${blockHeight}`;
-              this.$router.push(path)
-            }
-        }
+    name: 'app-header',
+    components: {EchartsPie, EchartsLine, HomeBlockModule},
+    data() {
+      return {
+        devicesWidth: window.innerWidth,
+        pageClassName: 'personal_computer_home_wrap',
+        module_item_wrap: 'module_item_wrap_computer',
+        currentBlockHeight: '--',
+        validatorValue: '--',
+        transactionValue: '--',
+        lastBlockAge: '--',
+        votingPowerValue: '--',
+        blockHeightValue: '',
+        timestampValue: '',
+        information: {},
+        informationLine: {},
+        blocksInformation: [],
+        transactionInformation: [],
+        innerWidth : window.innerWidth,
+        blocksTimer:null,
+        transfersTimer:null,
+        diffSeconds: 0,
+        flFadeInBlockHeight:false,
+        flFadeInTransaction: false,
+        flFadeInValidator:false,
+        flFadeInVotingPower:false,
+        timer: null
       }
+    },
+    beforeMount() {
+      this.getBlocksStatus();
+      this.getBlocksList();
+      this.getTransactionHistory();
+      this.getTransactionList();
+      this.getValidatorsList();
+    },
+    mounted() {
+      document.getElementById('router_wrap').addEventListener('click', this.hideFeature);
+      let that =this;
+      this.timer = setInterval(function () {
+        that.getBlocksList();
+        that.getTransactionHistory();
+        that.getTransactionList();
+        that.getValidatorsList();
+      },10000);
+      window.addEventListener('resize',this.onresize);
+      if (window.innerWidth > 910) {
+        this.pageClassName = 'personal_computer_home_wrap';
+        this.module_item_wrap = 'module_item_wrap_computer';
+        if(document.getElementsByClassName('fixed_item_height').length > 0){
+          document.getElementsByClassName('fixed_item_height')[0].style.height = '6.55rem';
+          document.getElementsByClassName('fixed_item_height')[1].style.height = '6.55rem';
+        }
+      } else {
+        this.pageClassName = 'mobile_home_wrap';
+        this.module_item_wrap = 'module_item_wrap_mobile';
+      }
+    },
+    beforeDestroy(){
+      window.removeEventListener('resize',this.onWindowResize);
+      clearInterval(this.timer)
+    },
+    methods: {
+      onresize(){
+        this.innerWidth = window.innerWidth;
+        if(window.innerWidth > 910){
+          this.pageClassName = 'personal_computer_home_wrap';
+          this.module_item_wrap = 'module_item_wrap_computer';
+          if(document.getElementsByClassName('fixed_item_height').length > 0) {
+            document.getElementsByClassName('fixed_item_height')[0].style.height = '6.55rem';
+            document.getElementsByClassName('fixed_item_height')[1].style.height = '6.55rem';
+          }
+        }else {
+          this.pageClassName = 'mobile_home_wrap';
+          this.module_item_wrap = 'module_item_wrap_mobile';
+          if(document.getElementsByClassName('fixed_item_height').length > 0) {
+            document.getElementsByClassName('fixed_item_height')[0].style.height = 'auto';
+            document.getElementsByClassName('fixed_item_height')[1].style.height = 'auto';
+          }
+        }
+      },
+      getBlocksStatus() {
+        this.flFadeInTransaction = false;
+        let url = `/api/chain/status`;
+        let lastTransfer =  {};
+        let that = this;
+        Service.http(url).then((data) => {
+          setTimeout(function () {
+            let storedLastTransfer  = localStorage.getItem('lastTransfer') ? JSON.parse(localStorage.getItem('lastTransfer')) : '';
+            if(storedLastTransfer){
+              if(storedLastTransfer.txCount !== data.TxCount
+                || storedLastTransfer.tps !== data.Tps){
+                that.flFadeInTransaction = true
+              }
+            }
+            let num = data.TxCount;
+            if(data) {
+              if(data.TxCount > 1000000000){
+                num = `${(data.TxCount/1000000000).toFixed(2)} B`;
+              }else if(data.TxCount > 1000000){
+                num = `${(data.TxCount/1000000).toFixed(2)} M`;
+              }else if(data.TxCount > 1000){
+                num = `${(data.TxCount/1000).toFixed(2)} K`;
+              }
+              that.transactionValue = `${num}(${data.Tps.toFixed(2)} TPS)`;
+            }
+            lastTransfer.txCount = data.TxCount;
+            lastTransfer.tps = data.Tps;
+            localStorage.setItem('lastTransfer',JSON.stringify(lastTransfer))
+          },1000)
+        }).catch(e => {
+          console.log(e)
+        })
+      },
+      getValidatorsList() {
+        let url = `/api/stake/candidatesTop`;
+        Service.http(url).then((data) => {
+          let colors = ['#3498db', '#47a2df', '#59ade3', '#6cb7e7', '#7fc2eb', '#91ccef', '#a4d7f3', '#b7e1f7', '#c9ecfb', '#dcf6ff', '#DADDE3',];
+          let [seriesData, legendData] = [[], []];
+          if (data.Candidates instanceof Array) {
+            let totalCount = 0;
+            data.Candidates.forEach(item=>totalCount += item.VotingPower);
+            let others = data.PowerAll - totalCount;
+            let monikerReserveLength = 10;
+            let addressReserveLength = 6;
+            let powerAll = data.PowerAll;
+            for (let i = 0; i < data.Candidates.length; i++) {
+              seriesData.push({
+                value: data.Candidates[i].VotingPower,
+                name: data.Candidates[i].Description.Moniker ? `${Tools.formatString(data.Candidates[i].Description.Moniker,monikerReserveLength,"...")} (${Tools.formatString(data.Candidates[i].Address,addressReserveLength,"...")})` : (data.Candidates[i].Address ? data.Candidates[i].Address : ''),
+                itemStyle: {color: colors[i]},
+                emphasis : {itemStyle:{color: colors[i]}},
+                upTime:`${data.Candidates[i].Uptime}%`,
+                address:data.Candidates[i].Address,
+                powerAll,
+              });
+              legendData.push(data.Candidates[i].Description.Moniker ? `${Tools.formatString(data.Candidates[i].Description.Moniker,monikerReserveLength,"...")} (${Tools.formatString(data.Candidates[i].Address,addressReserveLength,"...")})` : (data.Candidates[i].Address ? data.Candidates[i].Address : ''))
+            }
+            if(others > 0 ){
+              seriesData.push({
+                value: others,
+                name:'others',
+                powerAll,
+                itemStyle:{color:colors[10]},
+              });
+            }
+          }
+          this.information = {legendData, seriesData}
+        }).catch(e => {
+          console.log(e)
+        })
+      },
+      getTransactionHistory() {
+        let url = `/api/txsByDay`;
+        Service.http(url).then((data) => {
+          let maxValue = 0;
+          if(data){
+            data.forEach(item=>{
+              if(item.Count > maxValue){
+                maxValue = item.Count;
+              }
+            });
+            let xData = data.map(item=>`${String(item.Time).substr(5,2)}/${String(item.Time).substr(8,2)}/${String(item.Time).substr(0,4)}`);
+            let seriesData = data.map(item=>item.Count);
+            this.informationLine = {maxValue,xData,seriesData};
+          }
+        }).catch(e => {
+          console.log(e)
+        })
+      },
+      hideFadeinAnimation(){
+        this.flFadeInBlockHeight = false;
+        this.flFadeInValidator = false;
+        this.flFadeInVotingPower = false;
+      },
+      showFadeinAnimation(blockList,numerator,denominator){
+        let storedLastBlock = localStorage.getItem('lastBlock') ? JSON.parse(localStorage.getItem('lastBlock')) : '';
+        if(storedLastBlock){
+          if(storedLastBlock.activeValidator !== blockList[0].last_commit.length || storedLastBlock.totalValidator !== blockList[0].validators.length){
+            this.flFadeInValidator = true;
+          }
+          if(storedLastBlock.numerator !== numerator || storedLastBlock.denominator !== denominator){
+            this.flFadeInVotingPower = true
+          }
+        }
+      },
+      showBlockFadeinAnimation(blockList){
+        let storedLastBlockHeight = localStorage.getItem('lastBlockHeight') ? localStorage.getItem('lastBlockHeight') : '';
+        if(storedLastBlockHeight){
+          for(let index = 0; index < blockList.length; index++){
+            if(blockList[index].height > storedLastBlockHeight){
+              blockList[index].showAnimation = "show"
+            }
+          }
+        }
+      },
+      getBlocksList() {
+        let url = `/api/blocks/recent`;
+        Service.http(url).then((blockList) => {
+          this.getBlocksStatus();
+          this.hideFadeinAnimation();
+          if(blockList){
+            let denominator = 0,lastBlock = {};
+            blockList[0].validators.forEach(item=>denominator += item.voting_power);
+            let numerator = 0;
+            for(let i = 0; i < blockList[0].last_commit.length; i++){
+              for (let j = 0; j < blockList[0].validators.length; j++){
+                if(blockList[0].last_commit[i] === blockList[0].validators[j].address){
+                  numerator += blockList[0].validators[j].voting_power;
+                  break;
+                }
+              }
+            }
+            lastBlock.lastBlockHeight = blockList[0].height;
+            lastBlock.numerator = numerator;
+            lastBlock.denominator = denominator;
+            lastBlock.activeValidator = blockList[0].last_commit.length;
+            lastBlock.totalValidator = blockList[0].validators.length;
+            this.validatorValue = `${blockList[0].last_commit.length} voting / ${blockList[0].validators.length} total`;
+            this.votingPowerValue = denominator !== 0? `${(numerator/denominator).toFixed(2)*100}%`:'';
+            this.showFadeinAnimation(blockList,numerator,denominator);
+            this.showBlockFadeinAnimation(blockList);
+            let that = this;
+            clearInterval(this.blocksTimer);
+            this.blocksTimer = setInterval(function () {
+              let storedLastBlockHeight = localStorage.getItem('lastBlockHeight');
+              if(storedLastBlockHeight){
+                if(Number(storedLastBlockHeight) !== blockList[0].height){
+                  that.flFadeInBlockHeight = true;
+                }
+              }
+              let currentServerTime = new Date().getTime() + that.diffMilliseconds;
+              that.lastBlockAge = Tools.formatAge(currentServerTime,blockList[0].time);
+              that.diffSeconds = Math.floor(Tools.getDiffMilliseconds(currentServerTime,blockList[0].time)/1000);
+              localStorage.setItem('lastBlock',JSON.stringify(lastBlock));
+              localStorage.setItem("lastBlockHeight",blockList[0].height);
+              that.currentBlockHeight = blockList[0].height;
+              that.blocksInformation = blockList.map(item => {
+                return {
+                  showAnimation: item.showAnimation ? item.showAnimation : "",
+                  Height: item.height,
+                  Proposer: item.hash,
+                  Txn: item.num_txs,
+                  Time: Tools.format2UTC(item.time),
+                  Fee: '0 IRIS',
+                  age: Tools.formatAge(currentServerTime,item.time,Constant.SUFFIX,Constant.PREFIX)
+                };
+              });
+            },1000);
+          }
+        }).catch(e => {
+          console.log(e)
+        })
+      },
+      skipValidators(){
+        this.$router.push('/validators/3/active');
+      },
+      getTransactionList() {
+        let url = `/api/txs/recent`;
+        Service.http(url).then((transactionList) => {
+          if(transactionList){
+            let that = this;
+            for (let txIndex = 0; txIndex < transactionList.length; txIndex++){
+              if(new Date(transactionList[txIndex].time).getTime() > localStorage.getItem("lastTxTime")){
+                transactionList[txIndex].showAnimation = "show"
+              }
+            }
+            let lastTxTime = new Date(transactionList[0].time).getTime();
+            clearInterval(this.transfersTimer);
+            that.transactionInformation = transactionList.map(item => {
+              let [Amount, Fee] = ['--', '--'];
+              if(item.fee.amount){
+                if (item.fee.amount instanceof Array) {
+                  if(item.fee.amount.length > 0){
+                    item.fee.amount[0].amount = Tools.formatAmount(item.fee.amount[0].amount);
+                  }
+                  if(Tools.flTxType(item.type)){
+                    Amount = item.fee.amount.map(listItem => `${listItem.amount} SHARES`).join(',');
+                  }else {
+                    Amount = item.fee.amount.map(listItem => `${listItem.amount} ${Tools.formatDenom(listItem.denom).toUpperCase()}`).join(',');
+                  }
+                } else if (item.fee.amount && Object.keys(item.fee.amount).includes('amount') && Object.keys(item.fee.amount).includes('denom')) {
+                  Amount = `${item.fee.amount} ${Tools.formatDenom(item.fee.amount.denom).toUpperCase()}`;
+                  if(Tools.flTxType(item.Type)){
+                    Amount = `${item.fee.amount.amount} SHARES`;
+                  }
+                }
+              }else {
+                Amount = '';
+              }
+              if(item.fee.amount && item.fee.amount[0] && item.fee.amount[0].amount && item.fee.amount[0].denom){
+                Fee =  `${Tools.formatFeeToFixedNumber(item.fee.amount[0].amount)} ${Tools.formatDenom(item.fee.amount[0].denom).toUpperCase()}`;
+              }
+              let currentServerTime = new Date().getTime() + that.diffMilliseconds;
+              return {
+                showAnimation: item.showAnimation ? item.showAnimation : '',
+                TxHash: item.tx_hash,
+                From: '',
+                To: '',
+                Type: item.type === 'coin'?'transfer':item.type,
+                Fee,
+                Amount,
+                Time: Tools.format2UTC(item.time),
+                age: Tools.formatAge(currentServerTime,item.time,Constant.SUFFIX,Constant.PREFIX),
+                time:item.time
+              };
+            });
+            this.transfersTimer = setInterval(function () {
+              localStorage.setItem('lastTxTime',lastTxTime);
+              let currentServerTime = new Date().getTime() + that.diffMilliseconds;
+              that.transactionInformation = that.transactionInformation.map(t=>{
+                t.age = Tools.formatAge(currentServerTime,t.time,Constant.SUFFIX,Constant.PREFIX);
+                return t;
+              })
+            },1000)
+          }
+        }).catch(e => {
+          console.log(e)
+        })
+      }
+    }
   }
 </script>
 <style lang="scss">
@@ -400,15 +389,11 @@ import Constant from "../constant/Constant"
       .information_preview {
         @include flex;
         margin-bottom: 0.35rem;
-
         .information_preview_module {
           border-right: 1px solid #d6d9e0;
           @include flex;
           flex-direction: column;
           align-items: center;
-          span:nth-child(1){
-            height: 0.27rem;
-          }
           &:last-child {
             border-right: none;
           }
@@ -429,7 +414,6 @@ import Constant from "../constant/Constant"
         height: 3.5rem;
       }
     }
-
     .personal_computer_home_wrap {
       width: 100%!important;
       @include pcCenter;
@@ -438,7 +422,6 @@ import Constant from "../constant/Constant"
           flex: 1;
         }
       }
-
       .module_item_wrap_computer {
         width: 100%;
         @include flex();
@@ -453,7 +436,6 @@ import Constant from "../constant/Constant"
           }
         }
       }
-
     }
     .mobile_home_wrap {
       flex-direction: column;
@@ -485,7 +467,6 @@ import Constant from "../constant/Constant"
     .home_module_item_status {
       padding: 0.1rem;
       background: #3190e8;
-
       .current_block {
         @include fontWeight;
         color: #fff;
@@ -494,11 +475,9 @@ import Constant from "../constant/Constant"
         line-height: 0.28rem;
         border-bottom: 0.01rem solid #ffffff;
         width: 100%;
-
       }
       .home_status_bottom {
         @include flex();
-
         .home_status_bottom_content {
           flex: 1;
           @include flex();
@@ -509,7 +488,6 @@ import Constant from "../constant/Constant"
             font-weight: normal;
           }
         }
-
       }
     }
   }
@@ -554,8 +532,5 @@ import Constant from "../constant/Constant"
   }
   .animation{
     @include fadeInAnimation
-  }
-  .latest_block_content:hover{
-    cursor: pointer;
   }
 </style>
